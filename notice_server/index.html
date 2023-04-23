@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
+  <title></title>
+  <style>
+    html,
+    body {
+      position: relative;
+      height: 100%;
+      cursor: none;
+    }
+    body {
+      color: white;
+      background: black;
+      font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      margin: 0;
+      padding: 0;
+    }
+    .swiper {
+      width: 100%;
+      height: 100%;
+    }
+    .swiper-slide {
+      text-align: center;
+      font-size: 18px;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+    .swiper-slide img,
+    .swiper-slide video {
+      display: block;
+      width: 100%;
+      /*height: 100%;*/
+      object-fit: contain;
+      max-width: 100%;
+      max-height: 100vh;
+      z-index: 1;
+      padding: 0;
+      margin: 0 auto;
+    }
+    .swiper-slide p {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      transform: translate(0, -50%);
+      z-index: 0;
+      text-align: center; color: #fff;
+      text-shadow: 0 0 15px;
+    }
+  </style>
+  <!-- Link Swiper's CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.css" />
+
+  <!-- Swiper JS -->
+  <!--newer version does not work on old iPad-->
+  <!--script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js" defer></script-->
+  <script src="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.js"></script>
+
+</head>
+
+
+<body>
+  <!--this padding is so there is enough document length to scroll such that ipad minimal-ui goes into effect-->
+  <!--<div style="padding-bottom:25px;">&nbsp;</div>-->
+
+  <!-- Swiper -->
+  <div class="swiper mySwiper">
+    <div class="swiper-wrapper" id ="swiper-wrapper">
+    </div>
+    <div class="swiper-button-next"></div>
+    <div class="swiper-button-prev"></div>
+  </div>
+</body>
+
+  <!-- Initialize Swiper -->
+  <script type="text/javascript">
+    let INSTRUCTIONS_TIMEOUT = 3000; // minimum amount of time to display instructions
+    let my_refresh_event = document.createEvent('Event');
+    my_refresh_event.initEvent('MyRefreshEvent', true, true);
+
+    document.addEventListener('DOMContentLoaded', fetch_media);
+    document.addEventListener('MyRefreshEvent', fetch_media);
+
+    let media_attribs_prev = {};
+
+    let swiper = new Swiper(".mySwiper", {
+      // maybe detect host's processing power and enable more costly effects if it is capable
+      // starting point for that: https://stackoverflow.com/questions/8691756/how-can-i-test-the-users-computers-processing-power-using-javascript
+      //
+      // effects require a more powerful box
+      //effect: 'cube',
+      //cubeEffect: {
+      //  slideShadows: false,
+      //},
+      //effect: "cards",
+      //effect: "creative",
+      //effect: "flip",
+      //effect: "fade",
+      //speed: 2000,
+      loop: true,
+      autoplay: {
+        delay: 10000,
+        disableOnInteraction: false
+      },
+      navigation: {
+        nextEl: ".swiper-button-next",
+        prevEl: ".swiper-button-prev",
+      },
+    });
+
+    swiper.keyboard.enable();
+
+    swiper.on("keyPress", (swiper, keyCode) => {
+      switch (keyCode) {
+        case 38: // left arrow key
+          swiper.slidePrev();
+          break;
+        case 40: // right arrow key
+          swiper.slideNext();
+          break;
+      }
+    });
+
+    swiper.removeAllSlides();
+    swiper.addSlide(0, '<div class="swiper-slide"><p>Media loading.<br>'+window.location.origin+'/add.html to add media.<br>'+window.location.origin+'/remove.html to remove media.</p></div>');
+    swiper.disable();
+    swiper.update();
+    
+    function fetch_media(event) {
+      let url = "media.xml";
+      fetch(url)
+        .then(response=>response.text())
+        .then(data=>{
+          let parser = new DOMParser();
+          let xml = parser.parseFromString(data, "application/xml");
+          update_slides(xml);
+      });
+    }
+
+    function update_slides(xml) {
+      let media_attribs = {};
+      let files = xml.getElementsByTagName('file');
+      for (let i = 0; i < files.length; i++) {
+        let children = files[i].childNodes;
+        let file_path = children[0].firstChild.nodeValue;
+        let file_mtime  = children[2].firstChild.nodeValue;
+        media_attribs[file_path] = file_mtime;
+      }
+
+      if ( JSON.stringify(media_attribs) === JSON.stringify(media_attribs_prev) ) {
+        //console.log('No change in media. Not updating slides.')
+        return
+      }      
+      media_attribs_prev = media_attribs
+      
+      //console.log('Updating slides.');
+
+      swiper.removeAllSlides();
+      swiper.addSlide(0, '<div class="swiper-slide"><p>Media loading.<br>'+window.location.origin+'/add.html to add media.<br>'+window.location.origin+'/remove.html to remove media.</p></div>');
+      swiper.disable();
+      swiper.update();
+      let pt = performance.now();
+
+      files = xml.getElementsByTagName('file');
+      for (let i = 0; i < files.length; i++) {
+        children = files[i].childNodes;
+        let file_path = children[0].firstChild.nodeValue;
+        let html_tag  = children[1].firstChild.nodeValue;
+        if (html_tag == 'img') {
+          swiper.appendSlide('<div class="swiper-slide"><img id= "media'+i+'" src="'+file_path+'" /></div>');
+          if (i == 0) {
+            document.getElementById('media0').onload = function() {let time_left = INSTRUCTIONS_TIMEOUT - (performance.now() - pt); time_left < 0 ? 0 : time_left; setTimeout(function(){swiper.removeSlide(0); swiper.enable(); swiper.update();}, time_left); };
+          }
+        }  
+        else if (html_tag == 'video') {
+          swiper.appendSlide('<div class="swiper-slide"><video autoplay="true" loop="true" muted="true"><source src="'+file_path+'" /></video></div>');
+          if (i == 0) {
+            document.getElementById('media0').onloadeddata = function() {let time_left = INSTRUCTIONS_TIMEOUT - (performance.now() - pt); time_left < 0 ? 0 : time_left; setTimeout(function(){swiper.removeSlide(0); swiper.enable(); swiper.update();}, time_left); };
+          }
+        }
+      }
+      swiper.update();
+    }
+    
+    window.setInterval(function(){window.document.dispatchEvent(my_refresh_event);}, 30000);
+    
+  </script>
+</html>

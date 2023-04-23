@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
+  <title></title>
+  <style>
+    html,
+    body {
+      position: relative;
+      height: 100%;
+    }
+    body {
+      color: white;
+      background: black;
+      font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    #media-list {
+      text-align: center;
+    }
+    .file-delete-wrapper {
+      margin: 25px;
+      text-align: center;
+    }
+    img, video {
+      display: block;
+      height: 100%;
+      object-fit: contain;
+      max-height: 25vh;
+      max-width: 50%;
+      margin: 0 auto;
+    }
+    button {
+      margin: 5px;
+    }
+  </style>
+  <script type="text/javascript" defer>
+    let my_refresh_event = document.createEvent('Event');
+    my_refresh_event.initEvent('MyRefreshEvent', true, true);
+
+    document.addEventListener('DOMContentLoaded', build_media_list);
+    document.addEventListener('MyRefreshEvent', build_media_list);
+    
+    function build_media_list(event) {
+      let url = "media.xml";
+      fetch(url)
+      .then(response=>response.text())
+      .then(data=>{
+        let parser = new DOMParser();
+        let xml = parser.parseFromString(data, "application/xml");
+        add_media(xml);
+      });
+    }
+
+
+    function add_media(xml) {
+      let maindiv = document.getElementById('media-list');
+      maindiv.innerHTML = '';
+      let files = xml.getElementsByTagName('file');
+      for (let i = 0; i < files.length; i++) {
+        children = files[i].childNodes;
+        let file_path = children[0].firstChild.nodeValue;
+        let html_tag  = children[1].firstChild.nodeValue;
+        
+        file_path = file_path.split('?', 1)[0];
+
+        let media_el = document.createElement('img');
+        media_el.src = 'assets/file-question.png';
+        if (html_tag == 'img') {
+          media_el.src = file_path;
+        }  
+        else if (html_tag == 'video') {
+          media_el = document.createElement('video');
+          let source = document.createElement('source');
+          source.src = file_path;
+          media_el.appendChild(source);
+        }
+
+        let div = document.createElement('div');
+        div.className = 'file-delete-wrapper';
+        let text = document.createTextNode(file_path);
+        let button = document.createElement('button');
+
+        button.textContent = 'Delete';
+        button.value = file_path;
+        button.onclick = function(){delete_file(this.parentElement, file_path)}; 
+        div.appendChild(media_el);
+        div.appendChild(text);
+        div.appendChild(button);
+        maindiv.appendChild(div);
+      }
+      if (media.length === 0) {
+        maindiv.innerHTML = '<br><b>No media found.</b>';
+      }
+      
+    }
+    
+    function delete_file(parent_element, file_path) {
+      var ip = location.host;
+      var url = 'http://'+ip+'/delete';
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData();
+      xhr.open('DELETE', url, true);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.parent_element = parent_element;
+
+      xhr.addEventListener('readystatechange', function(e) {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          window.document.dispatchEvent(my_refresh_event);
+        }
+        else if (xhr.readyState == 4 && xhr.status != 200) {
+          let err_msg = document.createElement('div');
+          err_msg.innerText = 'Delete failed.';
+          err_msg.style.color = 'red';
+          xhr.parent_element.appendChild(err_msg);
+        }
+      })
+
+      formData.append('name', file_path)
+      xhr.send(formData)
+    }
+  </script>
+</head>
+
+<body>
+  <div id="media-list"></div>
+</body>
+</html>
+

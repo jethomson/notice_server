@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
+  <title></title>
+  <style>
+    html,
+    body {
+      position: relative;
+      height: 100%;
+    }
+    body {
+      color: white;
+      background: black;
+      font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      margin: 0;
+      padding: 0;
+    }
+    .my-form {
+      margin-bottom: 10px;
+    }
+    p {
+      margin-top: 0;
+    }
+    #fileElem {
+      display: none;
+    }
+    .button {
+      display: inline-block;
+      color: black;
+      background: #aaa;
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    .button:hover {
+      background: #ddd;
+    }
+    #progress-bar-holder {
+      display: block;
+      width: 100%;
+      max-width: 66vw;
+      color: black;
+      background-color: #f1f1f1;
+      margin: 0 auto;
+    }
+    #progress-bar {
+      display: table;
+      width: 0.5%; /* show a little color to help hint this is a progress bar */
+      height: 24px;
+      color: white;
+      background-color: green;
+      text-align: center;
+      vertical-align: middle;
+      padding: 0px; 
+    }
+    #upload-status {
+      display: block;
+    }
+    #drop-area {
+      border: 2px dashed #ccc;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 66vw;
+      min-height: 20vh;
+      margin: 10px auto;
+      padding: 0px;
+    }
+    #drop-area.highlight {
+      border-color: white;
+    }
+    #gallery {
+      margin-top: 10px;
+    }
+    #gallery img {
+      width: 150px;
+      margin-bottom: 10px;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+  </style>
+
+
+</head>
+
+<body>
+  <div>
+    <form class="my-form">
+      <div style="text-align: center">
+        <p id="info">Upload multiple files by choosing files with the file dialog or by dragging and dropping images onto the dashed region.<br>Supported types:&nbsp;</p>
+        <input type="file" id="fileElem" multiple accept="image/*" onchange="handleFiles(this.files)">
+        <label class="button" for="fileElem">Choose files</label>
+      </div>
+    </form>
+    <div id="progress-bar-holder">
+      <div id="progress-bar"></div>
+    </div>
+    <div id="drop-area">
+      <div id="gallery"/></div>
+    </div>
+  </div>
+</body>
+
+  <script type="text/javascript">
+    // drag and drop upload is based on code found here: https://codepen.io/joezimjs/pen/yPWQbd
+  
+    let supported_mime_types = []
+  
+    document.addEventListener('DOMContentLoaded', get_supported_types);
+    
+    function get_supported_types(event) {
+      let url = "types.json";
+      fetch(url)
+      .then(response=>response.json())
+      .then(data=>{
+        let supported_extensions = Object.keys(data);
+        for (let k in data) {
+          supported_mime_types.push(data[k]['mime_types']);
+        }
+        let el = document.getElementById('info');
+        supported_mime_types = supported_mime_types.flat();
+        el.innerText += supported_extensions.join(', ') + '.';
+      });
+    }
+  
+
+    let dropArea = document.getElementById("drop-area");
+    
+    // Prevent default drag behaviors
+    ;['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false);
+      document.body.addEventListener(eventName, preventDefaults, false);
+    })
+    
+    // Highlight drop area when item is dragged over it
+    ;['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, highlight, false);
+    })
+    
+    ;['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, unhighlight, false);
+    })
+    
+    // Handle dropped files
+    dropArea.addEventListener('drop', handleDrop, false);
+    
+    function preventDefaults (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    function highlight(e) {
+      dropArea.classList.add('highlight');
+    }
+    
+    function unhighlight(e) {
+      dropArea.classList.remove('active');
+    }
+    
+    function handleDrop(e) {
+      let dt = e.dataTransfer;
+      let files = dt.files;
+    
+      handleFiles(files);
+    }
+    
+    let uploadProgress = [];
+    let progressBar = document.getElementById('progress-bar');
+    
+    function initializeProgress(numFiles) {
+      progressBar.style.width = 0.5 +'%';
+      progressBar.innerText = '';
+      uploadProgress = [];
+    
+      for(let i = numFiles; i > 0; i--) {
+        uploadProgress.push(0);
+      }
+    }
+    
+    function updateProgress(fileNumber, percent) {
+      uploadProgress[fileNumber] = percent;
+      let total = uploadProgress.reduce((tot, curr) => tot + curr, 0) / uploadProgress.length;
+
+      progressBar.style.width = total +'%';
+    }
+    
+    // bug: drag and drop doesn't work in Chromium Version 111.0.5563.146 under Ubuntu 22.04
+    function handleFiles(files) {
+      files = [...files];
+      filtered_files = [];
+      for (f of files) {
+        if (f.type != undefined && supported_mime_types.includes(f.type)) {
+          console.log(`${f.name}, ${f.type} is a supported file type. Proceeding with upload.`)
+          filtered_files.push(f);
+        }
+        else {
+          console.log(`${f.name}, ${f.type} is an unsupported file type.`)
+        }
+      }
+
+      if (filtered_files.length != 0) {
+        initializeProgress(filtered_files.length);
+        filtered_files.forEach(uploadFile);
+        filtered_files.forEach(previewFile);
+      }
+      else {
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = 'red';
+        progressBar.innerText = 'No supported file types. Upload cancelled.';
+      }
+    }
+    
+    function previewFile(file) {
+      if (file.type.startsWith('image/')) {
+        let reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onloadend = function() {
+          let img = document.createElement('img');
+          img.src = reader.result;
+          document.getElementById('gallery').appendChild(img);
+        }
+      }
+      else if (file.type == 'application/pdf') {
+          let img = document.createElement('img');
+          img.src = 'assets/pdf-icon.png';
+          img.style.backgroundColor = 'white';
+          document.getElementById('gallery').appendChild(img);
+      }
+      else {
+        console.log(`${file.name}, ${file.type} is a not an image format. Cannot create thumbnail.`);
+        let img = document.createElement('img');
+        img.src = 'assets/file-question.png';
+        img.style.backgroundColor = 'white';
+        document.getElementById('gallery').appendChild(img);
+      }
+    }
+    
+    function uploadFile(file, i) {
+      let ip = location.host;
+      let url = 'http://'+ip+'/upload';
+      let xhr = new XMLHttpRequest();
+      let formData = new FormData();
+      xhr.open('PUT', url, true);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    
+
+      xhr.upload.addEventListener("progress", function(e) {
+        updateProgress(i, (e.loaded * 100.0 / e.total) || 100)
+      })
+    
+      xhr.addEventListener('readystatechange', function(e) {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          updateProgress(i, 100);
+
+          if ( uploadProgress.every( (percent) => percent === 100 ) ) {
+            progressBar.style.width = '100%';
+            progressBar.style.backgroundColor = 'green';
+            progressBar.innerText = 'Upload complete.';
+          }
+        }
+        else if (xhr.readyState == 4 && xhr.status != 200) {
+          progressBar.style.width = '100%';
+          progressBar.style.backgroundColor = 'red';
+          progressBar.innerText = 'Upload failed.';
+        }
+      })
+    
+      formData.append('file', file)
+      xhr.send(formData)
+    }
+  </script>
+
+
+
+</html>
